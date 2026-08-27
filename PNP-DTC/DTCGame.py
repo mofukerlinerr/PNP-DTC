@@ -1,7 +1,7 @@
 import random
 import pygame
 import sys
-from enum import Enum
+import enum
 
 # ----------------------------
 # Startup area
@@ -13,9 +13,7 @@ pygame.init()
 # ----------------------------
 font = pygame.font.Font(None, 36)
 
-playingarea = 0
-spawnX = playingarea - 10
-spawnY = playingarea - 10
+playingarea = 500
 
 difficulty = "Normal"
 difficulty_select = True
@@ -29,14 +27,16 @@ tick = 0
 genX = 0
 genY = 0
 
-map_scale = playingarea / 2000
-gen = 1000
+map_scale = 0.2
+gen = 10
 
 screen_width = 800
 screen_height = 600
 
 control = True
-player_speed = 5
+player_maxspeed = 5
+player_speedM = 0.1
+player_speed = 0
 playerX = 0
 playerY = 0
 player_moving = False
@@ -44,18 +44,45 @@ player_direction = "down"
 playerhealth = 100
 collection_area = 50
 origin_area = 250
+player_mX = 0
+player_mY = 0
 
-Fuel_worth = 5
-Fuel_count = playingarea // 100
+Fuel_worth = 10
+Fuel_count = 10
+Fuel_counted = 0
 
 
 # ----------------------------
-# list setup area
+# Classes
 # ----------------------------
-rects = []
+class enemy:
+    def __init__(self, x, y, width, height, color):
+        self.rect = pygame.Rect(x - camera_x, y - camera_y, width, height)
+        self.color = color
 
-for i in range(Fuel_count):
-    rects.append(pygame.Rect(random.randint(-spawnX, spawnX), random.randint(-spawnY, spawnY), 20, 20))
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect)
+        text_surface = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+#-------------------------------------------------------------------
+class button:
+    def __init__(self, x, y, width, height, text, color):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.color = color
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect)
+
+        font = pygame.font.Font(None, 36)
+        text_surface = font.render(self.text, True, (0, 0, 0))
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+
+    def is_clicked(self, mouse_pos):
+        return self.rect.collidepoint(mouse_pos)
+#-------------------------------------------------------------------
 
 # ----------------------------
 # pygame variables
@@ -64,6 +91,10 @@ screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("DTC Game")
 clock = pygame.time.Clock()
 
+button_easy = button(100, 50, 200, 40, "Easy", (0, 255, 0))
+button_normal = button(100, 100, 200, 40, "Normal", (255, 255, 0))
+button_hard = button(100, 150, 200, 40, "Hard", (255, 0, 0))
+
 while difficulty_select:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -71,47 +102,40 @@ while difficulty_select:
             difficulty_select = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             click_pos = event.pos
-
-            button_easy = pygame.Rect(100, 50, 200, 40)
-            button_normal = pygame.Rect(100, 100, 200, 40)
-            button_hard = pygame.Rect(100, 150, 200, 40)
             
-            if button_easy.collidepoint(click_pos):
+            if button_easy.is_clicked(click_pos):
                 difficulty = "Easy"
                 difficulty_select = False
                 playingarea = 500
-            elif button_normal.collidepoint(click_pos):
+                Fuel_count = 5
+            elif button_normal.is_clicked(click_pos):
                 difficulty = "Normal"
                 difficulty_select = False
                 playingarea = 1000
-            elif button_hard.collidepoint(click_pos):
+                Fuel_count = 10
+            elif button_hard.is_clicked(click_pos):
                 difficulty = "Hard"
                 difficulty_select = False
                 playingarea = 2000
-    
+                Fuel_count = 100
+
     screen.fill((0, 0, 0))
-    difficulty_text = font.render(f"Difficulty: {difficulty}", True, (255, 255, 255))
-    screen.blit(difficulty_text, (100, 10))
-
-    button_easy = pygame.Rect(100, 50, 200, 40)
-    button_normal = pygame.Rect(100, 100, 200, 40)
-    button_hard = pygame.Rect(100, 150, 200, 40)
-
-    pygame.draw.rect(screen, (0, 255, 0), button_easy)
-    pygame.draw.rect(screen, (255, 255, 0), button_normal)
-    pygame.draw.rect(screen, (255, 0, 0), button_hard)
-
-    easy_text = font.render("Easy", True, (0, 0, 0))
-    normal_text = font.render("Normal", True, (0, 0, 0))
-    hard_text = font.render("Hard", True, (0, 0, 0))
-
-    screen.blit(easy_text, (button_easy.x + 10, button_easy.y + 5))
-    screen.blit(normal_text, (button_normal.x + 10, button_normal.y + 5))
-    screen.blit(hard_text, (button_hard.x + 10, button_hard.y + 5))
+    button_easy.draw(screen)
+    button_normal.draw(screen)
+    button_hard.draw(screen)
+        
+    spawnX = playingarea - 10
+    spawnY = playingarea - 10
 
     pygame.display.flip()
     clock.tick(50)
 
+rects = []
+
+for i in range(Fuel_count):
+    rects.append(pygame.Rect(random.randint(-spawnX, spawnX), random.randint(-spawnY, spawnY), 20, 20))
+    Fuel_counted += 1
+    print(Fuel_counted)
 # ----------------------------
 # Main game loop
 # ----------------------------
@@ -121,32 +145,38 @@ while running:
             running = False
 
     if control:
-
         keys = pygame.key.get_pressed()
         player_moving = False
 
         if keys[pygame.K_w]:
             playerY -= player_speed
+            player_speed += player_speedM
             player_moving = True
             player_direction = "up"
 
         if keys[pygame.K_a]:
             playerX -= player_speed
+            player_speed += player_speedM
             player_moving = True
             player_direction = "left"
 
         if keys[pygame.K_s]:
             playerY += player_speed
+            player_speed += player_speedM
             player_moving = True
             player_direction = "down"
 
         if keys[pygame.K_d]:
             playerX += player_speed
+            player_speed += player_speedM
             player_moving = True
             player_direction = "right"
 
         if keys[pygame.K_e]:
             map_open = True
+
+        if not any((keys[pygame.K_w], keys[pygame.K_a], keys[pygame.K_s], keys[pygame.K_d])):
+            player_speed = 0
 
         if keys[pygame.K_r] and Fuel > 0:
             if player_direction == "up":
@@ -159,6 +189,10 @@ while running:
                 playerX += player_speed * 2
 
             Fuel -= 1
+
+    if player_speed > player_maxspeed:
+        player_speed = player_maxspeed
+
 
 
     # ----------------------------
@@ -234,13 +268,18 @@ while running:
             rect.y = random.randint(-spawnY, spawnY)
             Fuel += 1
 
-    print(f'Player: {playerX}, {playerY} | Fuel: {Fuel} | Gen: {gen:.0f} | Time: {time:.2f}| Difficulty: {difficulty}| Player Direction: {player_direction}')
+    print(f'Player: {playerX}, {playerY} | Fuel: {Fuel} | Gen: {gen:.0f} | Time: {time:.2f}| Difficulty: {difficulty}| Player Direction: {player_direction}| Fuel On Map: {Fuel_counted}')
     screen.fill((100, 100, 100))
 
 # ----------------------------
 # active variables area
 # ----------------------------
     player_rect = pygame.Rect(playerX - camera_x - 20, playerY - camera_y - 20, 40, 40)
+    player_rect_top = pygame.Rect(playerX - camera_x - 20, playerY - camera_y - 20, 40, 40)
+    player_rect_bottom = pygame.Rect(playerX - camera_x - 20, playerY - camera_y - 20, 40, 40)
+    player_rect_left = pygame.Rect(playerX - camera_x - 20, playerY - camera_y - 20, 40, 40)
+    player_rect_right = pygame.Rect(playerX - camera_x - 20, playerY - camera_y - 20, 40, 40)
+
     origin_screen_x = 0 - camera_x
     origin_screen_y = 0 - camera_y
     origin_radius = 20
@@ -254,7 +293,11 @@ while running:
     for rect in rects:
         pygame.draw.rect(screen, (255, 0, 0), (rect.x - camera_x, rect.y - camera_y, rect.width, rect.height))
 
-    pygame.draw.circle(screen, (0, 0, 255), player_rect.center, 20)
+    pygame.draw.circle(screen, (0, 0, 255), player_rect.center, 10)
+    pygame.draw.rect(screen, (0, 255, 0), player_rect_top, 10)
+    pygame.draw.rect(screen, (0, 255, 0), player_rect_bottom, 10)
+    pygame.draw.rect(screen, (0, 255, 0), player_rect_left, 10)
+    pygame.draw.rect(screen, (0, 255, 0), player_rect_right, 10)
     
     screen.blit(fuel_count, (0, 0))
     
